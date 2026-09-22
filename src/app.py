@@ -5,11 +5,16 @@ A super simple FastAPI application that allows students to view and sign up
 for extracurricular activities at Mergington High School.
 """
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import RedirectResponse
+from pydantic import BaseModel
+import hashlib
+import hmac
+import json
 import os
 from pathlib import Path
+import secrets
 
 app = FastAPI(title="Mergington High School API",
               description="API for viewing and signing up for extracurricular activities")
@@ -18,6 +23,37 @@ app = FastAPI(title="Mergington High School API",
 current_dir = Path(__file__).parent
 app.mount("/static", StaticFiles(directory=os.path.join(Path(__file__).parent,
           "static")), name="static")
+teachers_path = current_dir / "teachers.json"
+sessions: dict[str, str] = {}
+session_cookie_secure = os.getenv("SESSION_COOKIE_SECURE", "false").lower() == "true"
+
+
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+
+def load_teachers() -> dict[str, dict[str, str]]:
+    with teachers_path.open(encoding="utf-8") as credentials_file:
+        return json.load(credentials_file)
+
+
+def verify_password(password: str, credential: dict[str, str]) -> bool:
+    password_hash = hashlib.pbkdf2_hmac(
+        "sha256",
+        password.encode("utf-8"),
+        bytes.fromhex(credential["salt"]),
+        credential["iterations"],
+    ).hex()
+    return hmac.compare_digest(password_hash, credential["password_hash"])
+
+
+def require_teacher(request: Request) -> str:
+    session_token = request.cookies.get("teacher_session")
+    username = sessions.get(session_token or "")
+    if not username:
+        raise HTTPException(status_code=401, detail="Teacher login required")
+    return username
 
 # In-memory activity database
 activities = {
@@ -88,9 +124,46 @@ def get_activities():
     return activities
 
 
+@app.post("/auth/login")
+def login(login_request: LoginRequest, response: Response):
+    teachers = load_teachers()
+    credential = teachers.get(login_request.username)
+    if not credential or not verify_password(login_request.password, credential):
+        raise HTTPException(status_code=401, detail="Invalid username or password")
+
+    session_token = secrets.token_urlsafe(32)
+    sessions[session_token] = login_request.username
+    response.set_cookie(
+        key="teacher_session",
+        value=session_token,
+        httponly=True,
+        samesite="strict",
+        secure=session_cookie_secure,
+        max_age=8 * 60 * 60,
+    )
+    return {"username": login_request.username}
+
+
+@app.post("/auth/logout")
+def logout(request: Request, response: Response):
+    session_token = request.cookies.get("teacher_session")
+    if session_token:
+        sessions.pop(session_token, None)
+    response.delete_cookie("teacher_session", samesite="strict", secure=session_cookie_secure)
+    return {"message": "Logged out"}
+
+
+@app.get("/auth/me")
+def get_current_teacher(request: Request):
+    username = require_teacher(request)
+    return {"username": username}
+
+
 @app.post("/activities/{activity_name}/signup")
-def signup_for_activity(activity_name: str, email: str):
+def signup_for_activity(activity_name: str, email: str, request: Request):
     """Sign up a student for an activity"""
+    require_teacher(request)
+
     # Validate activity exists
     if activity_name not in activities:
         raise HTTPException(status_code=404, detail="Activity not found")
@@ -111,8 +184,10 @@ def signup_for_activity(activity_name: str, email: str):
 
 
 @app.delete("/activities/{activity_name}/unregister")
-def unregister_from_activity(activity_name: str, email: str):
+def unregister_from_activity(activity_name: str, email: str, request: Request):
     """Unregister a student from an activity"""
+    require_teacher(request)
+
     # Validate activity exists
     if activity_name not in activities:
         raise HTTPException(status_code=404, detail="Activity not found")

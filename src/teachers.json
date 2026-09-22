@@ -1,0 +1,7 @@
+{
+  "teacher": {
+    "salt": "d900c2b20473ab5730badbc2bde7fa8f",
+    "iterations": 200000,
+    "password_hash": "f8a5b110bf786cdb45b239c513db1a3568856beb2d1619faa037fd48eecf1090"
+  }
+}

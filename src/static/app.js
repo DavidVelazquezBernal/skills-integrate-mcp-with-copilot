@@ -2,7 +2,32 @@ document.addEventListener("DOMContentLoaded", () => {
   const activitiesList = document.getElementById("activities-list");
   const activitySelect = document.getElementById("activity");
   const signupForm = document.getElementById("signup-form");
+  const signupContainer = document.getElementById("signup-container");
   const messageDiv = document.getElementById("message");
+  const loginButton = document.getElementById("login-button");
+  const logoutButton = document.getElementById("logout-button");
+  const loginDialog = document.getElementById("login-dialog");
+  const closeLoginButton = document.getElementById("close-login-button");
+  const loginForm = document.getElementById("login-form");
+  const loginMessage = document.getElementById("login-message");
+  let teacherUsername = null;
+
+  function updateTeacherControls() {
+    const isTeacher = Boolean(teacherUsername);
+    signupContainer.classList.toggle("hidden", !isTeacher);
+    loginButton.classList.toggle("hidden", isTeacher);
+    logoutButton.classList.toggle("hidden", !isTeacher);
+  }
+
+  async function fetchCurrentTeacher() {
+    const response = await fetch("/auth/me");
+    if (!response.ok) {
+      return;
+    }
+
+    const teacher = await response.json();
+    teacherUsername = teacher.username;
+  }
 
   // Function to fetch activities from API
   async function fetchActivities() {
@@ -12,6 +37,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
       // Clear loading message
       activitiesList.innerHTML = "";
+      activitySelect.innerHTML = '<option value="">-- Select an activity --</option>';
 
       // Populate activities list
       Object.entries(activities).forEach(([name, details]) => {
@@ -21,7 +47,6 @@ document.addEventListener("DOMContentLoaded", () => {
         const spotsLeft =
           details.max_participants - details.participants.length;
 
-        // Create participants HTML with delete icons instead of bullet points
         const participantsHTML =
           details.participants.length > 0
             ? `<div class="participants-section">
@@ -30,7 +55,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 ${details.participants
                   .map(
                     (email) =>
-                      `<li><span class="participant-email">${email}</span><button class="delete-btn" data-activity="${name}" data-email="${email}">❌</button></li>`
+                      `<li><span class="participant-email">${email}</span>${teacherUsername ? `<button class="delete-btn" data-activity="${name}" data-email="${email}" aria-label="Unregister ${email} from ${name}">&times;</button>` : ""}</li>`
                   )
                   .join("")}
               </ul>
@@ -155,6 +180,49 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
+  loginButton.addEventListener("click", () => {
+    loginMessage.className = "hidden";
+    loginDialog.showModal();
+  });
+
+  closeLoginButton.addEventListener("click", () => loginDialog.close());
+
+  loginForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+
+    const response = await fetch("/auth/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        username: document.getElementById("username").value,
+        password: document.getElementById("password").value,
+      }),
+    });
+    const result = await response.json();
+
+    if (!response.ok) {
+      loginMessage.textContent = result.detail || "Unable to log in";
+      loginMessage.className = "error";
+      return;
+    }
+
+    teacherUsername = result.username;
+    loginForm.reset();
+    loginDialog.close();
+    updateTeacherControls();
+    fetchActivities();
+  });
+
+  logoutButton.addEventListener("click", async () => {
+    await fetch("/auth/logout", { method: "POST" });
+    teacherUsername = null;
+    updateTeacherControls();
+    fetchActivities();
+  });
+
   // Initialize app
-  fetchActivities();
+  fetchCurrentTeacher().finally(() => {
+    updateTeacherControls();
+    fetchActivities();
+  });
 });
