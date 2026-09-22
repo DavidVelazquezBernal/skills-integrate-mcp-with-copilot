@@ -16,16 +16,28 @@ body {
 }
 
 header {
-  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   padding: 20px 0;
   margin-bottom: 30px;
   background-color: #1a237e;
   color: white;
   border-radius: 5px;
+  padding: 20px;
 }
 
 header h1 {
   margin-bottom: 10px;
+}
+
+#auth-controls button {
+  background-color: white;
+  color: #1a237e;
+}
+
+#auth-controls button:hover {
+  background-color: #e8eaf6;
 }
 
 main {
@@ -115,7 +127,7 @@ section h3 {
   border: none;
   color: #c62828;
   cursor: pointer;
-  font-size: 14px;
+  font-size: 20px;
   padding: 2px 5px;
   transition: all 0.2s;
   border-radius: 3px;
@@ -164,6 +176,37 @@ button:hover {
   background-color: #3949ab;
 }
 
+dialog {
+  width: min(420px, calc(100% - 32px));
+  border: none;
+  border-radius: 5px;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.25);
+  padding: 24px;
+}
+
+dialog::backdrop {
+  background-color: rgba(0, 0, 0, 0.45);
+}
+
+.dialog-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+}
+
+.icon-button {
+  background: transparent;
+  color: #1a237e;
+  font-size: 28px;
+  line-height: 1;
+  padding: 0 6px;
+}
+
+.icon-button:hover {
+  background-color: #e8eaf6;
+}
+
 .message {
   margin-top: 20px;
   padding: 10px;
@@ -197,4 +240,12 @@ footer {
   margin-top: 30px;
   padding: 20px;
   color: #666;
+}
+
+@media (max-width: 600px) {
+  header {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 16px;
+  }
 }
